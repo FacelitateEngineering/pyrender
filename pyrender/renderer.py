@@ -14,8 +14,7 @@ from .shader_program import ShaderProgramCache
 from .material import MetallicRoughnessMaterial, SpecularGlossinessMaterial
 from .light import PointLight, SpotLight, DirectionalLight
 from .font import FontCache
-from .utils import format_color_vector
-
+from .utils import format_color_vector, invert_homogeneous
 from OpenGL.GL import *
 
 
@@ -824,7 +823,7 @@ class Renderer(object):
             width=self.viewport_width, height=self.viewport_height
         )
         pose = scene.get_pose(main_camera_node)
-        V = np.linalg.inv(pose)  # V maps from world to camera
+        V = invert_homogeneous(pose)  # V maps from world to camera
         return V, P
 
     def _get_light_cam_matrices(self, scene, light_node, flags):
@@ -838,7 +837,7 @@ class Renderer(object):
             c = scene.centroid
             loc = c - direction * s
             pose[:3,3] = loc
-        V = np.linalg.inv(pose)  # V maps from world to camera
+        V = invert_homogeneous(pose)  # V maps from world to camera
         return V, P
 
     ###########################################################################

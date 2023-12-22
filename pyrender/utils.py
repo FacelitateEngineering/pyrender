@@ -1,6 +1,15 @@
 import numpy as np
 from PIL import Image
 
+def invert_homogeneous(pose):
+    '''Fast inversion of 4x4 transormation matrix
+     using np.linalg.inv in busy loops can cause exessive cpu usage '''
+    pose_inv = np.zeros_like(pose)
+    pose_inv[...,:3,:3]=np.swapaxes(pose[...,:3,:3],-2,-1)
+    pose_inv[...,:3,3] = -(pose_inv[...,:3,:3] @ pose[...,:3,3:]).squeeze(axis=-1)
+    pose_inv[...,3,3] = 1
+    return pose_inv
+
 
 def format_color_vector(value, length):
     """Format a color vector.
