@@ -63,11 +63,13 @@ class Primitive(object):
                  color_0=None,
                  joints_0=None,
                  weights_0=None,
+                 blendshapes_0=None,
+                 coes_0=None,
                  indices=None,
                  material=None,
                  mode=None,
                  targets=None,
-                 poses=None):
+                 poses=None, ):
 
         if mode is None:
             mode = GLTF.TRIANGLES
@@ -80,11 +82,14 @@ class Primitive(object):
         self.color_0 = color_0
         self.joints_0 = joints_0
         self.weights_0 = weights_0
+        self.blendshapes_0 = blendshapes_0
+        self.coes_0 = coes_0
         self.indices = indices
         self.material = material
         self.mode = mode
         self.targets = targets
         self.poses = poses
+        
 
         self._bounds = None
         self._vaid = None
@@ -202,6 +207,35 @@ class Primitive(object):
     @weights_0.setter
     def weights_0(self, value):
         self._weights_0 = value
+
+    @property
+    def blendshapes_0(self):
+        """(n,m,3) float : Per vertex linear blendshapes.
+        """
+        return self._blendshapes
+
+    @blendshapes_0.setter
+    def blendshapes_0(self, value):
+        if value is not None:
+            value = np.asanyarray(value, dtype=np.float32)
+            value = np.ascontiguousarray(value)
+        self._blendshapes = value
+        self._coes_0 = np.zeros(self._blendshapes.shape[1])
+    
+    @property
+    def coes_0(self):
+        """(n,4) float : Weight information for blendshape morphing."""
+        return self._coes_0
+
+    @coes_0.setter
+    def coes_0(self, value):
+        self._coes_0 = value
+
+    @property
+    def n_blendshapes_0(self):
+        if self.blendshapes_0 is not None:
+            return self.blendshapes_0.shape[1]
+        return 0
 
     @property
     def indices(self):
@@ -371,6 +405,8 @@ class Primitive(object):
             GL_ARRAY_BUFFER, FLOAT_SZ * len(vertex_data),
             vertex_data, GL_STATIC_DRAW
         )
+        
+        
         total_sz = sum(attr_sizes)
         offset = 0
         for i, sz in enumerate(attr_sizes):
@@ -485,5 +521,6 @@ class Primitive(object):
             buf_flags |= BufFlags.JOINTS_0
         if self.weights_0 is not None:
             buf_flags |= BufFlags.WEIGHTS_0
-
+        if self.blendshapes_0 is not None:
+            buf_flags |= BufFlags.BLENDSHAPES_0
         return buf_flags

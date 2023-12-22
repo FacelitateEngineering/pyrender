@@ -364,7 +364,6 @@ class Renderer(object):
                 color = color / 255.0
 
             for primitive in mesh.primitives:
-
                 # First, get and bind the appropriate program
                 program = self._get_primitive_program(
                     primitive, flags, ProgramFlags.USE_MATERIAL
@@ -380,6 +379,10 @@ class Renderer(object):
                 if bool(flags & RenderFlags.SEG):
                     program.set_uniform('color', color)
 
+                if bool(flags & BufFlags.BLENDSHAPES_0):
+                    program.set_uniform(
+                        'coes_0', primitive.coes_0
+                    )
                 # Next, bind the lighting
                 if not (flags & RenderFlags.DEPTH_ONLY or flags & RenderFlags.FLAT or
                         flags & RenderFlags.SEG):
@@ -947,6 +950,11 @@ class Renderer(object):
         if bf & BufFlags.WEIGHTS_0:
             defines['WEIGHTS_0_LOC'] = buf_idx
             buf_idx += 1
+        if bf & BufFlags.BLENDSHAPES_0:
+            defines['BLENDSHAPES_0_LOC'] = buf_idx
+            buf_idx += 1
+            defines['BLENDSHAPES_0_N'] = primitive.n_blendshapes_0
+
         defines['INST_M_LOC'] = buf_idx
 
         # Set up shadow mapping defines

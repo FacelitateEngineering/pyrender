@@ -23,6 +23,13 @@ layout(location = JOINTS_0_LOC) in vec4 joints_0;
 #ifdef WEIGHTS_0_LOC
 layout(location = WEIGHTS_0_LOC) in vec4 weights_0;
 #endif
+#ifdef BLENDSHAPES_0_LOC
+layout(location = BLENDSHAPES_0_LOC) in vec3 blendshapes_0[BLENDSHAPES_0_N];
+uniform float coes_0[BLENDSHAPES_0_N];  // Array of weights for each blendshape
+#endif
+
+
+
 layout(location = INST_M_LOC) in mat4 inst_m;
 
 // Uniforms
@@ -55,9 +62,18 @@ out vec4 color_multiplier;
 
 void main()
 {
+#ifdef BLENDSHAPES_0_LOC
+    // Apply blendshapes
+    vec3 neutral_position = position;
+    for (int i = 1; i < BLENDSHAPES_0_N; i++) {
+        neutral_position += blendshapes_0[i] * coes_0[i];
+    }
+    gl_Position = P * V * M * inst_m * vec4(neutral_position, 1);
+    frag_position = vec3(M * inst_m * vec4(neutral_position, 1.0));
+#else
     gl_Position = P * V * M * inst_m * vec4(position, 1);
     frag_position = vec3(M * inst_m * vec4(position, 1.0));
-
+#endif
     mat4 N = transpose(inverse(M * inst_m));
 
 #ifdef NORMAL_LOC
