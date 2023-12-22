@@ -379,7 +379,7 @@ class Renderer(object):
                 if bool(flags & RenderFlags.SEG):
                     program.set_uniform('color', color)
 
-                if bool(flags & BufFlags.BLENDSHAPES_0):
+                if primitive.n_blendshapes_0 > 0:
                     program.set_uniform(
                         'coes_0', primitive.coes_0
                     )
