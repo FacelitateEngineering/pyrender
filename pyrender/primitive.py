@@ -219,8 +219,8 @@ class Primitive(object):
         if value is not None:
             value = np.asanyarray(value, dtype=np.float32)
             value = np.ascontiguousarray(value)
+            self._coes_0 = np.zeros(value.shape[1])
         self._blendshapes = value
-        self._coes_0 = np.zeros(self._blendshapes.shape[1])
     
     @property
     def coes_0(self):
@@ -394,9 +394,6 @@ class Primitive(object):
             vertex_data = np.hstack((vertex_data, self.color_0))
             attr_sizes.append(4)
 
-        # TODO JOINTS AND WEIGHTS
-        # PASS
-
         # Copy data to buffer
         vertex_data = np.ascontiguousarray(
             vertex_data.flatten().astype(np.float32)
@@ -417,6 +414,7 @@ class Primitive(object):
             glEnableVertexAttribArray(i)
             offset += sz
 
+
         #######################################################################
         # Fill model matrix buffer
         #######################################################################
@@ -435,7 +433,7 @@ class Primitive(object):
         glBindBuffer(GL_ARRAY_BUFFER, modelbuffer)
         glBufferData(
             GL_ARRAY_BUFFER, FLOAT_SZ * len(pose_data),
-            pose_data, GL_STATIC_DRAW
+            pose_data, GL_DYNAMIC_DRAW
         )
 
         for i in range(0, 4):
@@ -446,6 +444,58 @@ class Primitive(object):
                 ctypes.c_void_p(4 * FLOAT_SZ * i)
             )
             glVertexAttribDivisor(idx, 1)
+            # print(f'Primitive model buffer idx: {idx}')
+       #######################################################################
+        # Fill Blendshapes buffer
+        #######################################################################
+
+        if self.blendshapes_0 is not None:
+            # Blendshapes coes
+            coes_data = np.ascontiguousarray(
+                self.coes_0.flatten().astype(np.float32)
+            )
+
+            coe_buffer = glGenBuffers(1)
+            self._buffers.append(coe_buffer)
+            glBindBuffer(GL_ARRAY_BUFFER, coe_buffer)
+            glBufferData(
+                GL_ARRAY_BUFFER, FLOAT_SZ * len(coes_data),
+                coes_data, GL_DYNAMIC_DRAW
+            )
+            idx = len(attr_sizes) + 4 # pose
+            glEnableVertexAttribArray(idx)
+            # print(f'Primitive COE buffer idx: {idx}')
+            # import code
+            # code.interact(local=locals())
+            glVertexAttribPointer(
+                idx, self.n_blendshapes_0, GL_FLOAT, GL_FALSE, FLOAT_SZ, 
+                ctypes.c_void_p(0), 
+            )
+            glVertexAttribDivisor(idx, 1)
+            # print(f'Primitive COE buffer idx: {idx} done')  
+
+            # Blendshape data
+            blendshape_data = np.ascontiguousarray(
+                self.blendshapes_0.flatten().astype(np.float32)
+            )
+
+            bs_buffer = glGenBuffers(1)
+            self._buffers.append(bs_buffer)
+            glBindBuffer(GL_ARRAY_BUFFER, bs_buffer)
+            glBufferData(
+                GL_ARRAY_BUFFER, FLOAT_SZ * len(blendshape_data),
+                blendshape_data, GL_STATIC_DRAW
+            )
+            bs_data_idx = len(attr_sizes) + 4 + 1 # pose + coes
+            for i in range(0, self.n_blendshapes_0):
+                idx = bs_data_idx + i
+                glEnableVertexAttribArray(idx)
+                glVertexAttribPointer(
+                    idx, 3, GL_FLOAT, GL_FALSE, FLOAT_SZ * 3,
+                    ctypes.c_void_p(3 * FLOAT_SZ * i)
+                )
+                # glVertexAttribDivisor(idx, 1)
+
 
         #######################################################################
         # Fill element buffer

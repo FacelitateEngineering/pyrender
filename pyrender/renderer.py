@@ -949,12 +949,18 @@ class Renderer(object):
         if bf & BufFlags.WEIGHTS_0:
             defines['WEIGHTS_0_LOC'] = buf_idx
             buf_idx += 1
-        if bf & BufFlags.BLENDSHAPES_0:
-            defines['BLENDSHAPES_0_LOC'] = buf_idx
-            buf_idx += 1
-            defines['BLENDSHAPES_0_N'] = primitive.n_blendshapes_0
 
         defines['INST_M_LOC'] = buf_idx
+        buf_idx += 4
+
+        if bf & BufFlags.BLENDSHAPES_0:
+            defines['COES_0_LOC'] = buf_idx
+            print(f'Renderer COE buffer idx: {buf_idx}')
+            buf_idx += 1
+            defines['BLENDSHAPES_0_LOC'] = buf_idx
+            defines['BLENDSHAPES_0_N'] = primitive.n_blendshapes_0
+
+
 
         # Set up shadow mapping defines
         if flags & RenderFlags.SHADOWS_DIRECTIONAL:
