@@ -10,7 +10,8 @@ from OpenGL.GL import *
 from .material import Material, MetallicRoughnessMaterial
 from .constants import FLOAT_SZ, UINT_SZ, BufFlags, GLTF
 from .utils import format_color_array
-
+from .texture import Texture
+import logging as log
 
 class Primitive(object):
     """A primitive object which can be rendered.
@@ -96,6 +97,7 @@ class Primitive(object):
         self._buffers = []
         self._is_transparent = None
         self._buf_flags = None
+        self._blendshape_texture_id = None
 
     @property
     def positions(self):
@@ -219,8 +221,17 @@ class Primitive(object):
         if value is not None:
             value = np.asanyarray(value, dtype=np.float32)
             value = np.ascontiguousarray(value)
+            assert value.ndim == 3, 'Blendshapes must be 3D but got {}D'.format(value.ndim)
+            assert value.shape[0] == self.positions.shape[0], 'Blendshapes must have same number of vertices as positions'
+            self._blendshapes = value
             self._coes_0 = np.zeros(value.shape[1])
         self._blendshapes = value
+    
+    @property
+    def blendshape_abs_max(self):
+        if self._blendshapes is None:
+            return 0
+        return np.abs(self._blendshapes).max()
     
     @property
     def coes_0(self):
@@ -229,7 +240,11 @@ class Primitive(object):
 
     @coes_0.setter
     def coes_0(self, value):
+        if value is not None:
+            assert self.blendshapes_0 is not None, 'Cannot set coes without blendshapes'
+            assert len(value) == self.blendshapes_0.shape[1], 'Coes must have same number of blendshapes as blendshapes'
         self._coes_0 = value
+        
 
     @property
     def n_blendshapes_0(self):
@@ -444,59 +459,7 @@ class Primitive(object):
                 ctypes.c_void_p(4 * FLOAT_SZ * i)
             )
             glVertexAttribDivisor(idx, 1)
-            # print(f'Primitive model buffer idx: {idx}')
-       #######################################################################
-        # Fill Blendshapes buffer
-        #######################################################################
-
-        if self.blendshapes_0 is not None:
-            # Blendshapes coes
-            coes_data = np.ascontiguousarray(
-                self.coes_0.flatten().astype(np.float32)
-            )
-
-            coe_buffer = glGenBuffers(1)
-            self._buffers.append(coe_buffer)
-            glBindBuffer(GL_ARRAY_BUFFER, coe_buffer)
-            glBufferData(
-                GL_ARRAY_BUFFER, FLOAT_SZ * len(coes_data),
-                coes_data, GL_DYNAMIC_DRAW
-            )
-            idx = len(attr_sizes) + 4 # pose
-            glEnableVertexAttribArray(idx)
-            # print(f'Primitive COE buffer idx: {idx}')
-            # import code
-            # code.interact(local=locals())
-            glVertexAttribPointer(
-                idx, self.n_blendshapes_0, GL_FLOAT, GL_FALSE, FLOAT_SZ, 
-                ctypes.c_void_p(0), 
-            )
-            glVertexAttribDivisor(idx, 1)
-            # print(f'Primitive COE buffer idx: {idx} done')  
-
-            # Blendshape data
-            blendshape_data = np.ascontiguousarray(
-                self.blendshapes_0.flatten().astype(np.float32)
-            )
-
-            bs_buffer = glGenBuffers(1)
-            self._buffers.append(bs_buffer)
-            glBindBuffer(GL_ARRAY_BUFFER, bs_buffer)
-            glBufferData(
-                GL_ARRAY_BUFFER, FLOAT_SZ * len(blendshape_data),
-                blendshape_data, GL_STATIC_DRAW
-            )
-            bs_data_idx = len(attr_sizes) + 4 + 1 # pose + coes
-            for i in range(0, self.n_blendshapes_0):
-                idx = bs_data_idx + i
-                glEnableVertexAttribArray(idx)
-                glVertexAttribPointer(
-                    idx, 3, GL_FLOAT, GL_FALSE, FLOAT_SZ * 3,
-                    ctypes.c_void_p(3 * FLOAT_SZ * i)
-                )
-                # glVertexAttribDivisor(idx, 1)
-
-
+            
         #######################################################################
         # Fill element buffer
         #######################################################################
@@ -509,6 +472,38 @@ class Primitive(object):
                          GL_STATIC_DRAW)
 
         glBindVertexArray(0)
+        
+        #######################################################################
+        # Fill Blendshapes buffer
+        #######################################################################
+
+        if self.blendshapes_0 is not None:
+            self._blendshape_texture_id = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
+            blendshapes_data = np.concatenate([self.blendshapes_0, np.ones([self.blendshapes_0.shape[0], self.blendshapes_0.shape[1], 1])], axis=2)
+            blendshapes_data = np.ascontiguousarray(np.flip(blendshapes_data, axis=0).flatten().astype(np.float32))
+            normalized_blendshapes_data = blendshapes_data / self.blendshape_abs_max / 2 + 0.5
+            
+            
+            
+            # Set texture parameters
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+            width = self.blendshapes_0.shape[1] # n blendshapes
+            height = self.blendshapes_0.shape[0] # n vertex
+            print(f'Blendshape Texture: {width}, {height}')
+            assert normalized_blendshapes_data.min() >= 0, normalized_blendshapes_data.min()
+            assert normalized_blendshapes_data.max() <= 1, normalized_blendshapes_data.max()
+            
+            
+            glTexImage2D(
+                GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA,
+                GL_FLOAT, normalized_blendshapes_data
+            )
+
 
     def _remove_from_context(self):
         if self._vaid is not None:
@@ -516,6 +511,11 @@ class Primitive(object):
             glDeleteBuffers(len(self._buffers), self._buffers)
             self._vaid = None
             self._buffers = []
+            if self._blendshape_texture_id is not None:
+                glDeleteTextures([self._blendshape_texture_id])
+                self._blendshape_texture_id = None
+            
+            
 
     def _in_context(self):
         return self._vaid is not None
@@ -525,9 +525,13 @@ class Primitive(object):
             raise ValueError('Cannot bind a Mesh that has not been added '
                              'to a context')
         glBindVertexArray(self._vaid)
+        if self._blendshape_texture_id is not None:
+            glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
 
     def _unbind(self):
         glBindVertexArray(0)
+        if self._blendshape_texture_id is not None:
+            glBindTexture(GL_TEXTURE_2D, 0)
 
     def _compute_bounds(self):
         """Compute the bounds of this object.

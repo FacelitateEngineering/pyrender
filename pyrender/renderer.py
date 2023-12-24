@@ -382,6 +382,9 @@ class Renderer(object):
                     program.set_uniform(
                         'coes_0', primitive.coes_0
                     )
+                    program.set_uniform('blendshape_abs_max', primitive.blendshape_abs_max)
+                    program.set_uniform('test_move', primitive.test_move)
+                    print(f'Forward Pass coes and norm: {primitive.coes_0[:5]} {primitive.blendshape_abs_max} {primitive.test_move}') 
                 # Next, bind the lighting
                 if not (flags & RenderFlags.DEPTH_ONLY or flags & RenderFlags.FLAT or
                         flags & RenderFlags.SEG):
@@ -516,6 +519,7 @@ class Renderer(object):
 
         # Bind mesh buffers
         primitive._bind()
+        
 
         # Bind mesh material
         if not (flags & RenderFlags.DEPTH_ONLY or flags & RenderFlags.SEG):
@@ -954,10 +958,7 @@ class Renderer(object):
         buf_idx += 4
 
         if bf & BufFlags.BLENDSHAPES_0:
-            defines['COES_0_LOC'] = buf_idx
-            print(f'Renderer COE buffer idx: {buf_idx}')
-            buf_idx += 1
-            defines['BLENDSHAPES_0_LOC'] = buf_idx
+            # print(f'BLENDSHAPES_0_N: {primitive.n_blendshapes_0}')
             defines['BLENDSHAPES_0_N'] = primitive.n_blendshapes_0
 
 
@@ -1242,6 +1243,9 @@ class Renderer(object):
                 # Set the camera uniforms
                 program.set_uniform('V', V)
                 program.set_uniform('P', P)
+                if primitive.buf_flags & BufFlags.BLENDSHAPES_0:
+                    program.set_uniform('coes_0', primitive.coes_0)
+                    program.set_uniform('blendshape_abs_max', primitive.blendshape_abs_max)
                 program.set_uniform(
                     'cam_pos', scene.get_pose(scene.main_camera_node)[:3,3]
                 )
