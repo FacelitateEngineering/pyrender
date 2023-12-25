@@ -29,8 +29,7 @@ layout(location = INST_M_LOC) in mat4 inst_m;
 #ifdef BLENDSHAPES_0_N 
 uniform sampler2D blendshapes_0;      // Texture containing vertex data, width=blendshape count, height=vertex count
 uniform float coes_0[BLENDSHAPES_0_N];
-uniform float blendshape_abs_max;
-uniform float test_move;
+uniform float blendshape_abs_max_2;
 #endif
 
 
@@ -65,21 +64,12 @@ out vec4 color_multiplier;
 void main()
 {
 #ifdef BLENDSHAPES_0_N
-    // Apply blendshapes
-    // vec3 neutral_position = position + vec3(0.0, test_move, test_move);
-    vec3 neutral_position = position;
-    float vertex_id = float(gl_VertexID) / 3084; 
-    // float vertex_id = float(gl_VertexID) / float(textureSize(blendshapes_0, 0).x); 
-    
-
+    vec3 neutral_position = position;    
     for (int i = 0; i < BLENDSHAPES_0_N; i++) {
-        vec2 texCoord = vec2(vertex_id, i/BLENDSHAPES_0_N);
-        // vec2 texCoord = vec2(i/BLENDSHAPES_0_N, vertex_id);
-        // vec2 texCoord = vec2(i/BLENDSHAPES_0_N, 0.5);
-        vec3 blendshapes = (texture(blendshapes_0, texCoord).xyz - 0.5)*2*blendshape_abs_max;
-        // vec3 blendshapes = vec3(0.0, vertex_id, 0.0);
-        // vec3 blendshapes = vec3(0.0, 1.0, 0.0);
-        neutral_position += blendshapes * test_move; // * coes_0[i] 
+        float v = float(i)/float(BLENDSHAPES_0_N);
+        vec2 texCoord = vec2(v, 1.0-texcoord_1.x );
+        vec3 blendshapes = (texture(blendshapes_0, texCoord).xyz - 0.5)*blendshape_abs_max_2;
+        neutral_position += blendshapes * coes_0[i];
     }
 
     gl_Position = P * V * M * inst_m * vec4(neutral_position, 1.0);

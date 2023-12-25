@@ -11,7 +11,7 @@ from .material import Material, MetallicRoughnessMaterial
 from .constants import FLOAT_SZ, UINT_SZ, BufFlags, GLTF
 from .utils import format_color_array
 from .texture import Texture
-import logging as log
+from .sampler import Sampler
 
 class Primitive(object):
     """A primitive object which can be rendered.
@@ -97,6 +97,7 @@ class Primitive(object):
         self._buffers = []
         self._is_transparent = None
         self._buf_flags = None
+        self._blendshape_texture = None
         self._blendshape_texture_id = None
 
     @property
@@ -219,11 +220,31 @@ class Primitive(object):
     @blendshapes_0.setter
     def blendshapes_0(self, value):
         if value is not None:
+        
             value = np.asanyarray(value, dtype=np.float32)
-            value = np.ascontiguousarray(value)
+            # value = np.ascontiguousarray(value)
             assert value.ndim == 3, 'Blendshapes must be 3D but got {}D'.format(value.ndim)
             assert value.shape[0] == self.positions.shape[0], 'Blendshapes must have same number of vertices as positions'
+            assert value.shape[2] == 3, 'Blendshapes must be in format [n, m, 3]' 
+            
             self._blendshapes = value
+            blendshapes_data = np.concatenate([value, np.ones([value.shape[0], value.shape[1], 1])], axis=2) # add alpha channel
+            normalized = blendshapes_data/self.blendshape_abs_max / 2 + 0.5
+            assert normalized.min() >= 0, normalized.min()
+            assert normalized.max() <= 1, normalized.max()
+            assert self.texcoord_1 is None, 'Cannot use blendshapes with texcoord_1'
+            self.texcoord_1 = np.arange(value.shape[0]).reshape(-1,1).repeat(2, axis=1) / (value.shape[0]-1)
+
+            self._blendshape_texture = Texture('blendshapes_texture', 
+                    sampler=Sampler(
+                        magFilter=GL_NEAREST,
+                        minFilter=GL_NEAREST,
+                        wrapS=GL_CLAMP_TO_EDGE,
+                        wrapT=GL_CLAMP_TO_EDGE
+                        ),
+                    source=normalized, 
+                    source_channels='RGBA',
+                    )
             self._coes_0 = np.zeros(value.shape[1])
         self._blendshapes = value
     
@@ -478,31 +499,32 @@ class Primitive(object):
         #######################################################################
 
         if self.blendshapes_0 is not None:
-            self._blendshape_texture_id = glGenTextures(1)
-            glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
-            blendshapes_data = np.concatenate([self.blendshapes_0, np.ones([self.blendshapes_0.shape[0], self.blendshapes_0.shape[1], 1])], axis=2)
-            blendshapes_data = np.ascontiguousarray(np.flip(blendshapes_data, axis=0).flatten().astype(np.float32))
-            normalized_blendshapes_data = blendshapes_data / self.blendshape_abs_max / 2 + 0.5
+            # self._blendshape_texture_id = glGenTextures(1)
+            # glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
+            # blendshapes_data = np.concatenate([self.blendshapes_0, np.ones([self.blendshapes_0.shape[0], self.blendshapes_0.shape[1], 1])], axis=2)
+            # blendshapes_data = np.ascontiguousarray(np.flip(blendshapes_data, axis=0).flatten().astype(np.float32))
+            # normalized_blendshapes_data = blendshapes_data / self.blendshape_abs_max / 2 + 0.5
             
             
             
-            # Set texture parameters
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            # # Set texture parameters
+            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
-            width = self.blendshapes_0.shape[1] # n blendshapes
-            height = self.blendshapes_0.shape[0] # n vertex
-            print(f'Blendshape Texture: {width}, {height}')
-            assert normalized_blendshapes_data.min() >= 0, normalized_blendshapes_data.min()
-            assert normalized_blendshapes_data.max() <= 1, normalized_blendshapes_data.max()
+            # width = self.blendshapes_0.shape[1] # n blendshapes
+            # height = self.blendshapes_0.shape[0] # n vertex
+            # print(f'Blendshape Texture: {width}, {height}')
+            # assert normalized_blendshapes_data.min() >= 0, normalized_blendshapes_data.min()
+            # assert normalized_blendshapes_data.max() <= 1, normalized_blendshapes_data.max()
             
             
-            glTexImage2D(
-                GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA,
-                GL_FLOAT, normalized_blendshapes_data
-            )
+            # glTexImage2D(
+            #     GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA,
+            #     GL_FLOAT, normalized_blendshapes_data
+            # )
+            self._blendshape_texture._add_to_context()
 
 
     def _remove_from_context(self):
@@ -511,9 +533,10 @@ class Primitive(object):
             glDeleteBuffers(len(self._buffers), self._buffers)
             self._vaid = None
             self._buffers = []
-            if self._blendshape_texture_id is not None:
-                glDeleteTextures([self._blendshape_texture_id])
-                self._blendshape_texture_id = None
+            if self.blendshapes_0 is not None:
+                self._blendshape_texture._remove_from_context()
+                # glDeleteTextures([self._blendshape_texture_id])
+                # self._blendshape_texture_id = None
             
             
 
@@ -526,12 +549,14 @@ class Primitive(object):
                              'to a context')
         glBindVertexArray(self._vaid)
         if self._blendshape_texture_id is not None:
-            glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
+            self._blendshape_texture._bind()
+            # glBindTexture(GL_TEXTURE_2D, self._blendshape_texture_id)
 
     def _unbind(self):
         glBindVertexArray(0)
         if self._blendshape_texture_id is not None:
-            glBindTexture(GL_TEXTURE_2D, 0)
+            # glBindTexture(GL_TEXTURE_2D, 0)
+            self._blendshape_texture._unbind()
 
     def _compute_bounds(self):
         """Compute the bounds of this object.

@@ -379,12 +379,10 @@ class Renderer(object):
                     program.set_uniform('color', color)
 
                 if primitive.n_blendshapes_0 > 0:
-                    program.set_uniform(
-                        'coes_0', primitive.coes_0
-                    )
-                    program.set_uniform('blendshape_abs_max', primitive.blendshape_abs_max)
-                    program.set_uniform('test_move', primitive.test_move)
-                    print(f'Forward Pass coes and norm: {primitive.coes_0[:5]} {primitive.blendshape_abs_max} {primitive.test_move}') 
+                    loc = glGetUniformLocation(program._program_id, 'coes_0')
+                    glUniform1fv(loc, primitive.n_blendshapes_0, primitive.coes_0) # set uniform assume 1d array only has one item
+                    program.set_uniform('test_move', float(primitive.test_move))
+                    program.set_uniform('blendshape_abs_max_2', float(primitive.blendshape_abs_max)*2)
                 # Next, bind the lighting
                 if not (flags & RenderFlags.DEPTH_ONLY or flags & RenderFlags.FLAT or
                         flags & RenderFlags.SEG):
@@ -516,10 +514,15 @@ class Renderer(object):
     def _bind_and_draw_primitive(self, primitive, pose, program, flags):
         # Set model pose matrix
         program.set_uniform('M', pose)
+        
 
         # Bind mesh buffers
         primitive._bind()
-        
+        if primitive.blendshapes_0 is not None:
+            
+            self._bind_texture(primitive._blendshape_texture, 'blendshapes_0', program)
+            # program.set_uniform('blendshape_abs_max', primitive.blendshape_abs_max)
+            # print(f'Bind and draw primitive: {primitive._blendshape_texture}')
 
         # Bind mesh material
         if not (flags & RenderFlags.DEPTH_ONLY or flags & RenderFlags.SEG):
